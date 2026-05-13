@@ -17,26 +17,25 @@
     #status.err { color: red; }
     #download[hidden] { display: none; }
     #download { display: inline-block; margin: 0.4em 0; }
+    #sources-list { margin: 0.6em 0; }
+    .source-row { display: flex; align-items: center; gap: 0.5em; padding: 0.3em 0; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
+    .source-row .fname { max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .source-row input[type="text"] { width: 6em; }
+    .source-row .count { color: #666; font-size: 0.9em; }
+    .source-row button { padding: 0.2em 0.5em; margin: 0; font-size: 0.85em; }
+    #pack:disabled { opacity: 0.5; cursor: not-allowed; }
+    #conflicts { margin: 0.6em 0; }
   </style>
 </head>
 <body>
   <h1>DoL 美化模组打包器</h1>
-  <p class="intro">把含 body/clothes 等子目录的 ZIP 压缩包打包成 DoL ModLoader 格式。</p>
+  <p class="intro">把含 body/clothes 等子目录的 ZIP 压缩包打包成 DoL ModLoader 格式。列表中越靠下的 ZIP 优先级越高（后写覆盖前写）。</p>
 
-  <label>
-    <span>上传 ZIP:</span>
-    <input type="file" id="file" accept=".zip">
-  </label>
-
-  <label>
-    <span>img 路径:</span>
-    <input type="text" id="path" value="/" placeholder="/">
-  </label>
-  <div class="hint">填 "/" 表示压缩包根目录即 img, 填 "img/" 表示压缩包内 img 子目录为资源根目录。</div>
+  <input type="file" id="file" accept=".zip" multiple hidden>
 
   <label>
     <span>模组名称:</span>
-    <input type="text" id="name" placeholder="(上传后自动填充)">
+    <input type="text" id="name" placeholder="(留空则取第一个 ZIP 文件名)">
   </label>
 
   <label>
@@ -44,9 +43,16 @@
     <input type="text" id="version" value="1.0.0">
   </label>
 
-  <button id="pack">开始打包</button>
+  <div style="margin: 0.6em 0; font-weight: bold;">来源列表:</div>
+  <div id="sources-list"></div>
 
-  <div id="status">请上传 ZIP 文件</div>
+  <button id="add-zip">+ 添加 ZIP</button>
+
+  <button id="pack" disabled>开始打包</button>
+
+  <div id="status">请添加至少一个 ZIP 文件</div>
+
+  <div id="conflicts" hidden></div>
 
   <a id="download" hidden>下载</a>
 
@@ -81,6 +87,10 @@
       return filename.replace(/\.[^./]+$/, '');
     }
 
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     function buildBootJson(name, version, imgList, additionList) {
       return {
         name: name,
@@ -103,17 +113,10 @@
       };
     }
     // === 业务函数 ===
-    let loadedZip = null;
-    let loadedFileName = '';
+    let sources = [];
 
     async function readZipFile(file) {
       return await JSZip.loadAsync(file);
-    }
-
-    function countEntries(zip) {
-      let n = 0;
-      zip.forEach(() => n++);
-      return n;
     }
 
     function collectEntries(zip, normalizedPath) {
@@ -131,28 +134,111 @@
       return entries;
     }
 
-    async function packMod(zip, pathStr, name, version) {
-      const normalized = normalizePath(pathStr);
-      const entries = collectEntries(zip, normalized);
-      if (entries.length === 0) {
-        throw new Error('未在压缩包内找到路径 "' + pathStr + '" 下的文件');
+    function countMatchEntries(zip, pathStr) {
+      return collectEntries(zip, normalizePath(pathStr)).length;
+    }
+
+    function renderSourcesList() {
+      const container = document.getElementById('sources-list');
+      if (sources.length === 0) {
+        container.innerHTML = '<div style="color:#666;font-size:0.9em;">暂无 ZIP，请点击「+ 添加 ZIP」</div>';
+        document.getElementById('pack').disabled = true;
+        setStatus('idle', '请添加至少一个 ZIP 文件');
+        return;
       }
+      let html = '';
+      let totalFiles = 0;
+      for (let i = 0; i < sources.length; i++) {
+        const s = sources[i];
+        totalFiles += s.matchCount;
+        const showUp = i > 0;
+        const showDown = i < sources.length - 1;
+        html += '<div class="source-row">' +
+          '<span class="fname" title="' + escapeHtml(s.fileName) + '">' + escapeHtml(s.fileName) + '</span>' +
+          '<span>img路径:</span>' +
+          '<input type="text" value="' + escapeHtml(s.path) + '" data-idx="' + i + '" class="path-input">' +
+          '<span class="count">匹配 ' + s.matchCount + ' 个文件</span>' +
+          (showUp ? '<button data-idx="' + i + '" data-dir="up">上移</button>' : '') +
+          (showDown ? '<button data-idx="' + i + '" data-dir="down">下移</button>' : '') +
+          '<button data-idx="' + i + '" data-dir="del">删除</button>' +
+        '</div>';
+      }
+      container.innerHTML = html;
+      document.getElementById('pack').disabled = false;
+      setStatus('loaded', '已添加 ' + sources.length + ' 个 ZIP, 共 ' + totalFiles + ' 个文件');
+
+      // Bind path input events
+      container.querySelectorAll('.path-input').forEach(function(input) {
+        input.addEventListener('change', function() {
+          const idx = parseInt(this.dataset.idx, 10);
+          sources[idx].path = this.value;
+          sources[idx].matchCount = countMatchEntries(sources[idx].zip, this.value);
+          renderSourcesList();
+        });
+      });
+
+      // Bind move/delete button events
+      container.querySelectorAll('button[data-dir]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const idx = parseInt(this.dataset.idx, 10);
+          const dir = this.dataset.dir;
+          if (dir === 'up' && idx > 0) {
+            const tmp = sources[idx];
+            sources[idx] = sources[idx - 1];
+            sources[idx - 1] = tmp;
+          } else if (dir === 'down' && idx < sources.length - 1) {
+            const tmp = sources[idx];
+            sources[idx] = sources[idx + 1];
+            sources[idx + 1] = tmp;
+          } else if (dir === 'del') {
+            sources.splice(idx, 1);
+          }
+          renderSourcesList();
+        });
+      });
+    }
+
+    async function mergeAndPack(sources, modName, modVersion) {
+      const finalMap = new Map();
+      const conflicts = [];
+
+      for (const source of sources) {
+        const normalized = normalizePath(source.path);
+        const entries = collectEntries(source.zip, normalized);
+        if (entries.length === 0) {
+          throw new Error('"' + source.fileName + '" 路径 "' + source.path + '" 下无任何文件匹配');
+        }
+        for (const item of entries) {
+          const rel = item.rel;
+          if (finalMap.has(rel)) {
+            const old = finalMap.get(rel);
+            conflicts.push({
+              relPath: rel,
+              overwrittenBy: source.fileName,
+              originalSource: old.source
+            });
+          }
+          const data = await item.entry.async('uint8array');
+          finalMap.set(rel, { data: data, source: source.fileName });
+        }
+      }
+
+      const out = new JSZip();
       const imgList = [];
       const additionList = [];
-      const out = new JSZip();
-      for (const item of entries) {
-        const outPath = 'img/' + item.rel;
-        const data = await item.entry.async('uint8array');
-        out.file(outPath, data);
-        if (isImageFile(item.rel)) {
+      for (const [rel, info] of finalMap) {
+        const outPath = 'img/' + rel;
+        out.file(outPath, info.data);
+        if (isImageFile(rel)) {
           imgList.push(outPath);
         } else {
           additionList.push(outPath);
         }
       }
-      const bootObj = buildBootJson(name, version, imgList, additionList);
+      const bootObj = buildBootJson(modName, modVersion, imgList, additionList);
       out.file('boot.json', JSON.stringify(bootObj, null, 2));
-      return await out.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+      const blob = await out.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+      return { blob: blob, totalFiles: finalMap.size, conflicts: conflicts };
     }
 
     function triggerDownload(blob, filename) {
@@ -166,6 +252,23 @@
       a.textContent = '下载 ' + filename;
       a.hidden = false;
     }
+
+    function renderConflicts(conflicts) {
+      const el = document.getElementById('conflicts');
+      if (conflicts.length === 0) {
+        el.hidden = true;
+        return;
+      }
+      let html = '<details>' +
+        '<summary>冲突列表 (' + conflicts.length + ')</summary>' +
+        '<ul style="font-size:0.9em;margin:0.4em 0;">';
+      for (const c of conflicts) {
+        html += '<li>img/' + escapeHtml(c.relPath) + ': ' + escapeHtml(c.originalSource) + ' → ' + escapeHtml(c.overwrittenBy) + '</li>';
+      }
+      html += '</ul></details>';
+      el.innerHTML = html;
+      el.hidden = false;
+    }
     // === UI 与事件绑定 ===
     const statusEl = document.getElementById('status');
     function setStatus(kind, text) {
@@ -175,46 +278,75 @@
     }
 
     document.getElementById('file').addEventListener('change', async function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (!file.name.toLowerCase().endsWith('.zip')) {
-        setStatus('error', '错误: 请选择 .zip 文件');
-        loadedZip = null;
-        return;
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+      const validFiles = files.filter(function(f) { return f.name.toLowerCase().endsWith('.zip'); });
+      const invalidCount = files.length - validFiles.length;
+      if (invalidCount > 0) {
+        setStatus('error', '错误: 有 ' + invalidCount + ' 个文件不是 .zip，已跳过');
       }
-      setStatus('reading', '读取压缩包...');
-      try {
-        loadedZip = await readZipFile(file);
-        loadedFileName = file.name;
-        const nameInput = document.getElementById('name');
-        if (!nameInput.value.trim()) {
-          nameInput.value = basenameNoExt(file.name);
+      if (validFiles.length === 0) return;
+
+      setStatus('reading', '正在解析 ' + validFiles.length + ' 个压缩包...');
+      const nameInput = document.getElementById('name');
+      let firstAdded = false;
+
+      for (const file of validFiles) {
+        try {
+          const zip = await readZipFile(file);
+          const matchCount = countMatchEntries(zip, '/');
+          sources.push({
+            fileName: file.name,
+            zip: zip,
+            path: '/',
+            matchCount: matchCount
+          });
+          if (!firstAdded) {
+            firstAdded = true;
+            if (!nameInput.value.trim()) {
+              nameInput.value = basenameNoExt(file.name);
+            }
+          }
+        } catch (err) {
+          setStatus('error', '错误: 压缩包 ' + file.name + ' 损坏或不是有效的 ZIP');
         }
-        const n = countEntries(loadedZip);
-        setStatus('loaded', '已加载 ' + n + ' 个条目, 请确认 path 与名称后点击"开始打包"');
-      } catch (err) {
-        loadedZip = null;
-        setStatus('error', '错误: 压缩包损坏或不是有效的 ZIP');
       }
+
+      renderSourcesList();
+      // Reset file input so the same files can be selected again
+      e.target.value = '';
+    });
+
+    document.getElementById('add-zip').addEventListener('click', function () {
+      document.getElementById('file').click();
     });
 
     document.getElementById('pack').addEventListener('click', async function () {
-      if (!loadedZip) {
-        setStatus('error', '错误: 请先上传 ZIP 文件');
+      if (sources.length === 0) {
+        setStatus('error', '错误: 请至少添加一个 ZIP 文件');
         return;
       }
-      const pathStr = document.getElementById('path').value;
-      const name = document.getElementById('name').value.trim();
-      const version = document.getElementById('version').value.trim();
-      if (!name)    { setStatus('error', '错误: 请填写模组名称'); return; }
-      if (!version) { setStatus('error', '错误: 请填写版本号'); return; }
+      let name = document.getElementById('name').value.trim();
+      let version = document.getElementById('version').value.trim();
+      if (!name) {
+        name = basenameNoExt(sources[0].fileName);
+      }
+      if (!version) {
+        version = '1.0.0';
+      }
 
-      setStatus('packing', '正在分析与重新打包...');
+      setStatus('packing', '正在合并与打包...');
       document.getElementById('download').hidden = true;
+      document.getElementById('conflicts').hidden = true;
       try {
-        const blob = await packMod(loadedZip, pathStr, name, version);
-        triggerDownload(blob, name + '.mod.zip');
-        setStatus('done', '完成 ✓ 点击下方下载链接');
+        const result = await mergeAndPack(sources, name, version);
+        triggerDownload(result.blob, name + '.mod.zip');
+        let statusText = '完成 ✓ 合并 ' + result.totalFiles + ' 个文件';
+        if (result.conflicts.length > 0) {
+          statusText += ', 冲突(覆盖) ' + result.conflicts.length + ' 个';
+          renderConflicts(result.conflicts);
+        }
+        setStatus('done', statusText);
       } catch (err) {
         setStatus('error', '错误: ' + err.message);
       }
@@ -255,6 +387,13 @@
       T("boot.styleFileList is empty array",
         Array.isArray(boot.styleFileList) && boot.styleFileList.length === 0);
 
+      T("escapeHtml('<\">') === '&lt;&quot;&gt;'", escapeHtml('<">') === '&lt;&quot;&gt;');
+      T("countMatchEntries exists", typeof countMatchEntries === 'function');
+      T("mergeAndPack exists", typeof mergeAndPack === 'function');
+      T("renderSourcesList exists", typeof renderSourcesList === 'function');
+      T("renderConflicts exists", typeof renderConflicts === 'function');
+
+      console.log('---\n通过 ' + pass + ', 失败 ' + fail);
       return { pass: pass, fail: fail, results: results };
     };
   </script>
