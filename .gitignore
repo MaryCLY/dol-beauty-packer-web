@@ -7,11 +7,11 @@
 # Claude Code workspace files
 .claude/
 
-# Python source script
-dol美化模组自动生成器.py
+# Reference code
+reference/
 
 # ZIP test fixtures
-*.zip
+test/*.zip
 
 # Playwright MCP temp files
 .playwright-mcp/
