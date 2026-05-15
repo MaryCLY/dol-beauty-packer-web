@@ -68,6 +68,17 @@ export async function readZipFile(file) {
   return await window.JSZip.loadAsync(file);
 }
 
+export async function readBootJson(zip) {
+  const entry = zip.file('boot.json');
+  if (!entry) return null;
+  const text = await entry.async('text');
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return null;
+  }
+}
+
 export function collectEntries(zip, normalizedPath) {
   const entries = [];
   zip.forEach(function (relPath, entry) {
