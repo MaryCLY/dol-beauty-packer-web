@@ -310,8 +310,8 @@ export function mount(container) {
       if (!els.name.value.trim()) {
         els.name.value = (boot.name || basenameNoExt(file.name)) + '-overwrite';
       }
-      if (!els.version.value.trim()) {
-        els.version.value = boot.version || '1.0.0';
+      if (boot.version) {
+        els.version.value = boot.version;
       }
 
       renderBaseInfo();
