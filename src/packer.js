@@ -278,6 +278,7 @@ export function mount(container) {
     }
 
     setStatus(els.status, 'packing', '正在合并与打包...');
+    els.pack.disabled = true;
     els.download.hidden = true;
     els.conflicts.hidden = true;
     try {
@@ -291,6 +292,8 @@ export function mount(container) {
       setStatus(els.status, 'done', statusText);
     } catch (err) {
       setStatus(els.status, 'error', '错误: ' + err.message);
+    } finally {
+      els.pack.disabled = false;
     }
   });
 
