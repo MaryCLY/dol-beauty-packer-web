@@ -3,7 +3,7 @@
 纯前端工具集，目前包含两个工具：
 
 1. **打包模组**：把含 `body`、`clothes` 等子目录的 ZIP 压缩包打包成 [DoL ModLoader](https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader) 兼容的美化模组格式。
-2. **覆盖原版图包**（规划中）：把美化图片包直接覆盖到 ModLoader 版本的原版游戏图包（部分 DoL 版本下，原版图包通过 ModLoader 加载）。
+2. **覆盖原版图包**：把美化图片包直接覆盖到 ModLoader 版本的原版游戏图包（部分 DoL 版本下，原版图包通过 ModLoader 加载）。
 
 ## 快速使用
 
