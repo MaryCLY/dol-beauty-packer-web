@@ -18,15 +18,17 @@
     #download[hidden] { display: none; }
     #download { display: inline-block; margin: 0.4em 0; }
     #sources-list { margin: 0.6em 0; }
-    .source-row { display: flex; align-items: center; gap: 0.5em; padding: 0.3em 0; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
+    .source-row { display: flex; flex-direction: column; gap: 0.3em; padding: 0.4em 0; border-bottom: 1px solid #ddd; }
+    .source-row .line1 { display: flex; align-items: center; gap: 0.5em; width: 100%; }
+    .source-row .line2 { display: flex; align-items: center; gap: 0.5em; width: 100%; flex-wrap: wrap; }
     .source-row .fname { max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .source-row input[type="text"] { width: 6em; }
+    .source-row input[type="text"] { flex: 1; min-width: 4em; }
     .source-row .count { color: #666; font-size: 0.9em; }
     .source-row button { padding: 0.2em 0.5em; margin: 0; font-size: 0.85em; }
     #pack:disabled { opacity: 0.5; cursor: not-allowed; }
     #conflicts { margin: 0.6em 0; }
     nav.tabs { margin: 0.8em 0; border-bottom: 1px solid #ddd; }
-    nav.tabs button { padding: 0.4em 1em; margin-right: 0.4em; border: 1px solid #ddd; border-bottom: none; background: #f6f6f6; cursor: pointer; }
+    nav.tabs button { padding: 0.4em 1em; margin: 0 0.4em 0 0; border: 1px solid #ddd; border-bottom: none; background: #f6f6f6; cursor: pointer; }
     nav.tabs button.active { background: #fff; border-bottom: 1px solid #fff; margin-bottom: -1px; font-weight: bold; }
   </style>
 </head>

@@ -100,18 +100,22 @@ export function mount(container) {
       const showDown = i < state.sources.length - 1;
       let folderTip = '';
       if (s.info && s.info.folderCount > 0) {
-        const first = s.info.folders.slice(0, 3).join(', ');
-        const more = s.info.folderCount > 3 ? ' 等' : '';
+        const first = s.info.folders[0];
+        const more = s.info.folderCount > 1 ? ', ...' : '';
         folderTip = ' (' + s.info.folderCount + ' 个目录: ' + first + more + ')';
       }
       html += '<div class="source-row">' +
-        '<span class="fname" title="' + escapeHtml(s.fileName) + '">' + escapeHtml(s.fileName) + '</span>' +
-        '<span>img路径:</span>' +
-        '<input type="text" value="' + escapeHtml(s.path) + '" data-idx="' + i + '" class="path-input">' +
-        '<span class="count">匹配 ' + s.matchCount + ' 个文件' + folderTip + '</span>' +
-        (showUp ? '<button data-idx="' + i + '" data-dir="up">上移</button>' : '') +
-        (showDown ? '<button data-idx="' + i + '" data-dir="down">下移</button>' : '') +
-        '<button data-idx="' + i + '" data-dir="del">删除</button>' +
+        '<div class="line1">' +
+          '<span class="fname" title="' + escapeHtml(s.fileName) + '">' + escapeHtml(s.fileName) + '</span>' +
+          '<span>img路径:</span>' +
+          '<input type="text" value="' + escapeHtml(s.path) + '" data-idx="' + i + '" class="path-input">' +
+        '</div>' +
+        '<div class="line2">' +
+          '<span class="count">匹配 ' + s.matchCount + ' 个文件' + folderTip + '</span>' +
+          (showUp ? '<button data-idx="' + i + '" data-dir="up">上移</button>' : '') +
+          (showDown ? '<button data-idx="' + i + '" data-dir="down">下移</button>' : '') +
+          '<button data-idx="' + i + '" data-dir="del">删除</button>' +
+        '</div>' +
       '</div>';
     }
     els.sourcesList.innerHTML = html;

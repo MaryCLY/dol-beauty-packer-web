@@ -106,7 +106,8 @@ export function collectFolderInfo(zip, normalizedPath) {
       if (rel.length > 0) {
         fileCount++;
         const firstSlash = rel.indexOf('/');
-        const topName = firstSlash === -1 ? rel : rel.slice(0, firstSlash);
+        if (firstSlash === -1) return; // 根级文件不算目录
+        const topName = rel.slice(0, firstSlash);
         if (topName) {
           topFolders.add(topName);
         }
