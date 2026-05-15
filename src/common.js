@@ -28,7 +28,7 @@ export function basenameNoExt(filename) {
 // =========================================================
 
 export function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // =========================================================
@@ -75,6 +75,7 @@ export async function readBootJson(zip) {
   try {
     return JSON.parse(text);
   } catch (err) {
+    console.warn('[readBootJson] boot.json parse failed:', err.message);
     return null;
   }
 }
