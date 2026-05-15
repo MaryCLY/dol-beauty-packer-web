@@ -229,7 +229,11 @@ export function mount(container) {
         throw new Error('"' + source.fileName + '" 路径 "' + source.path + '" 下无任何文件匹配');
       }
       for (const item of entries) {
-        const rel = item.rel;
+        let rel = item.rel;
+        // 如果覆盖图包内部已有 img/ 前缀，则剥离，避免输出 img/img/...
+        if (rel.toLowerCase().startsWith('img/')) {
+          rel = rel.slice(4);
+        }
         const outPath = 'img/' + rel;
         if (finalImgPaths.has(outPath)) {
           conflicts.push({
