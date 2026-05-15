@@ -94,6 +94,33 @@ export function collectEntries(zip, normalizedPath) {
   return entries;
 }
 
+export function collectFolderInfo(zip, normalizedPath) {
+  const topFolders = new Set();
+  let fileCount = 0;
+  zip.forEach(function (relPath, entry) {
+    if (entry.dir) return;
+    const name = relPath.replace(/\\/g, '/');
+    if (normalizedPath === '' || name.startsWith(normalizedPath)) {
+      const rel = name.slice(normalizedPath.length);
+      if (rel.length > 0) {
+        fileCount++;
+        const firstSlash = rel.indexOf('/');
+        const topName = firstSlash === -1 ? rel : rel.slice(0, firstSlash);
+        if (topName) {
+          topFolders.add(topName);
+        }
+      }
+    }
+  });
+  const folders = Array.from(topFolders);
+  folders.sort();
+  return {
+    fileCount,
+    folderCount: folders.length,
+    folders,
+  };
+}
+
 // =========================================================
 // UI helpers
 // =========================================================

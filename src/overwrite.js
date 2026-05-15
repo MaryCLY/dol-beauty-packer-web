@@ -7,6 +7,7 @@ import {
   readZipFile,
   readBootJson,
   collectEntries,
+  collectFolderInfo,
   escapeHtml,
   setStatus,
   triggerDownload,
@@ -112,8 +113,11 @@ export function mount(container) {
       '<br>img/ 文件数: ' + imgCount;
   }
 
-  function countMatchEntries(zip, pathStr) {
-    return collectEntries(zip, normalizePath(pathStr)).length;
+  function getMatchInfo(zip, pathStr) {
+    const normalized = normalizePath(pathStr);
+    const entries = collectEntries(zip, normalized);
+    const info = collectFolderInfo(zip, normalized);
+    return { matchCount: entries.length, info };
   }
 
   function renderSourcesList() {
@@ -130,11 +134,17 @@ export function mount(container) {
       totalFiles += s.matchCount;
       const showUp = i > 0;
       const showDown = i < state.sources.length - 1;
+      let folderTip = '';
+      if (s.info && s.info.folderCount > 0) {
+        const first = s.info.folders.slice(0, 3).join(', ');
+        const more = s.info.folderCount > 3 ? ' 等' : '';
+        folderTip = ' (' + s.info.folderCount + ' 个目录: ' + first + more + ')';
+      }
       html += '<div class="source-row">' +
         '<span class="fname" title="' + escapeHtml(s.fileName) + '">' + escapeHtml(s.fileName) + '</span>' +
         '<span>img路径:</span>' +
         '<input type="text" value="' + escapeHtml(s.path) + '" data-idx="' + i + '" class="path-input">' +
-        '<span class="count">匹配 ' + s.matchCount + ' 个文件</span>' +
+        '<span class="count">匹配 ' + s.matchCount + ' 个文件' + folderTip + '</span>' +
         (showUp ? '<button data-idx="' + i + '" data-dir="up">上移</button>' : '') +
         (showDown ? '<button data-idx="' + i + '" data-dir="down">下移</button>' : '') +
         '<button data-idx="' + i + '" data-dir="del">删除</button>' +
@@ -149,7 +159,9 @@ export function mount(container) {
       input.addEventListener('change', function () {
         const idx = parseInt(this.dataset.idx, 10);
         state.sources[idx].path = this.value;
-        state.sources[idx].matchCount = countMatchEntries(state.sources[idx].zip, this.value);
+        const { matchCount, info } = getMatchInfo(state.sources[idx].zip, this.value);
+        state.sources[idx].matchCount = matchCount;
+        state.sources[idx].info = info;
         renderSourcesList();
       });
     });
@@ -347,12 +359,13 @@ export function mount(container) {
     for (const file of validFiles) {
       try {
         const zip = await readZipFile(file);
-        const matchCount = countMatchEntries(zip, '/');
+        const { matchCount, info } = getMatchInfo(zip, '/');
         state.sources.push({
           fileName: file.name,
           zip,
           path: '/',
           matchCount,
+          info,
         });
       } catch (err) {
         setStatus(els.status, 'error', '错误: 压缩包 ' + file.name + ' 损坏或不是有效的 ZIP');
