@@ -6,12 +6,12 @@
 
 - 顶部 tab nav 右侧增加语言切换器，两个按钮：`中文` / `EN`。
 - 整站 UI 文本（标签、按钮、placeholder、状态、错误信息、tab 名）均经过 `t(key, vars)` 翻译。
-- 用户选择持久化到 `localStorage`，刷新后保留。
+- **首次访问按浏览器语言自动选择**：`navigator.language` 主语言为 `zh` → `zh-CN`；其余（含 `en` 与所有未识别语言）→ `en-US`。
+- 用户手动切换后写入 `localStorage`，刷新后保持用户选择（覆盖浏览器检测）。
 - 切换语言时同步更新 `<html lang>`，重渲染当前 tab。
 
 **不在范围**：
 - 不支持除 zh-CN / en-US 之外的语言（YAGNI；架构留扩展点但不实现）。
-- 不做浏览器语言自动检测（首次访问总是默认 zh-CN）。
 - 不翻译 README / 设计文档 / 注释 / `console.log` 日志（仅用户面向文本走 i18n）。
 - 不引入任何第三方 i18n 库（保持零构建/vanilla ES Modules 路线）。
 - 不做切换时保留 sources 列表的高级体验优化（沿用 unmount+mount 生命周期，已添加的 ZIP 会被清空）。
@@ -45,7 +45,8 @@ src/
 | # | 决策点 | 选择 | 备选 | 理由 |
 |---|--------|------|------|------|
 | D1 | 支持语言 | zh-CN + en-US | + ja-JP / 多语言 | 受众主体中文,DoL 原版英文;其余 YAGNI |
-| D2 | 默认语言 | 总是 zh-CN | navigator.language 自动检测 | 首屏可预期;自动检测可后补 |
+| D2 | 首次默认语言 | `navigator.language` 主语言匹配:`zh` → `zh-CN`,其余 → `en-US` | 总是 zh-CN / 总是 en-US / 弹窗询问 | 受众有海外 DoL 玩家;中文用户浏览器普遍 `zh-CN`,自动检测可命中;识别不出时偏英文(更通用) |
+| D2b | 字典回退语言 | 缺失 key 时回退到 `zh-CN`(canonical) | 回退 en-US | 中文字典为源文本,翻译漏译时回退中文比回退到自己更有意义 |
 | D3 | 库选型 | 自写 `t(key, vars)` | i18next 等 | 守住零构建约定,无依赖 |
 | D4 | 资源组织 | 单文件 `src/i18n.js` | 按语言/工具拆文件 | 100 条文本,单文件最简 |
 | D5 | 键命名 | 扁平点分 `ns.section.key` | 嵌套对象访问 | 易做缺失/重复自检 |
@@ -96,7 +97,7 @@ nav.tabs { flex: 1; border-bottom: none; margin: 0; }
 
 ```js
 export const SUPPORTED_LANGS = ['zh-CN', 'en-US'];
-export const DEFAULT_LANG = 'zh-CN';
+export const FALLBACK_LANG = 'zh-CN';   // 字典缺失 key 时回退的语言(canonical)
 export const STORAGE_KEY = 'dolbp_lang';
 
 export const messages = {
@@ -104,17 +105,24 @@ export const messages = {
   'en-US': { /* 见 §6 */ },
 };
 
-export function getLang() { /* localStorage → fallback DEFAULT_LANG */ }
-export function setLang(code) { /* 写 storage + emit langchange */ }
-export function t(key, vars = {}) { /* 查询 + 占位符替换 + 缺失回退 */ }
-export function onLangChange(cb) { /* 简易订阅,返回 unsubscribe */ }
+// 纯函数:把 BCP-47 标签映射到 SUPPORTED_LANGS,zh-* → 'zh-CN',其余 → 'en-US'。导出供测试调用。
+export function pickLangFromTag(tag)
+
+export function getLang() {
+  // 1. localStorage 优先(用户曾手动选择)
+  // 2. 否则用 pickLangFromTag(navigator.languages[0] || navigator.language || '')
+  //    navigator 不可用时退化为 pickLangFromTag('') → 'en-US'
+}
+export function setLang(code)               // 写 storage + emit langchange
+export function t(key, vars = {})           // 查询 + 占位符替换 + 缺失回退到 FALLBACK_LANG
+export function onLangChange(cb)            // 简易订阅,返回 unsubscribe
 ```
 
 ### 5.2 `t(key, vars)` 行为
 
 1. 取 `messages[getLang()][key]`。
-2. 若不存在 → 取 `messages[DEFAULT_LANG][key]`，并 `console.warn('[i18n] missing key', key, 'in', lang)`。
-3. 若 default 中也不存在 → 返回 `key` 本身（防止 UI 空白），并 `console.warn`。
+2. 若不存在 → 取 `messages[FALLBACK_LANG][key]`，并 `console.warn('[i18n] missing key', key, 'in', lang)`。
+3. 若 FALLBACK_LANG 中也不存在 → 返回 `key` 本身（防止 UI 空白），并 `console.warn`。
 4. 用 `vars` 替换 `{name}`：
 
    ```js
@@ -253,7 +261,7 @@ export function onLangChange(cb) { /* 简易订阅,返回 unsubscribe */ }
 ```js
 // src/i18n.js
 export const SUPPORTED_LANGS = ['zh-CN', 'en-US'];
-export const DEFAULT_LANG = 'zh-CN';
+export const FALLBACK_LANG = 'zh-CN';   // 字典回退(canonical)
 export const STORAGE_KEY = 'dolbp_lang';
 
 export const messages = {
@@ -269,16 +277,43 @@ export const messages = {
 
 let _listeners = [];
 
+// 纯函数:输入 BCP-47 语言标签(如 'zh-CN'/'en'/'ja-JP'/''),输出 SUPPORTED_LANGS 之一。
+// 规则:取主语言段;'zh' → 'zh-CN';其余(含空) → 'en-US'。
+export function pickLangFromTag(tag) {
+  const main = String(tag || '').toLowerCase().split('-')[0];
+  if (main === 'zh') return 'zh-CN';
+  return 'en-US';
+}
+
+// 内部:读取浏览器语言,委托给 pickLangFromTag。
+function detectFromBrowser() {
+  let raw = '';
+  try {
+    if (typeof navigator !== 'undefined') {
+      raw = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+    }
+  } catch (_) { /* 忽略 */ }
+  return pickLangFromTag(raw);
+}
+
 export function getLang() {
-  const v = (typeof localStorage !== 'undefined') ? localStorage.getItem(STORAGE_KEY) : null;
-  return SUPPORTED_LANGS.includes(v) ? v : DEFAULT_LANG;
+  let stored = null;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      stored = localStorage.getItem(STORAGE_KEY);
+    }
+  } catch (_) { /* 忽略 */ }
+  if (SUPPORTED_LANGS.includes(stored)) return stored;
+  return detectFromBrowser();
 }
 
 export function setLang(code) {
   if (!SUPPORTED_LANGS.includes(code)) return;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, code);
-  }
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, code);
+    }
+  } catch (_) { /* 隐私模式等场景:仅当前会话生效 */ }
   for (const cb of _listeners) {
     try { cb(code); } catch (err) { console.error('[i18n] listener', err); }
   }
@@ -294,8 +329,8 @@ export function t(key, vars) {
   const lang = getLang();
   let text = messages[lang] && messages[lang][key];
   if (text === undefined) {
-    if (lang !== DEFAULT_LANG) {
-      text = messages[DEFAULT_LANG] && messages[DEFAULT_LANG][key];
+    if (lang !== FALLBACK_LANG) {
+      text = messages[FALLBACK_LANG] && messages[FALLBACK_LANG][key];
       if (text !== undefined) {
         console.warn('[i18n] missing key', key, 'in', lang);
       }
@@ -308,6 +343,8 @@ export function t(key, vars) {
   return text.replace(/\{(\w+)\}/g, (_, k) => (k in vars ? String(vars[k]) : '{' + k + '}'));
 }
 ```
+
+**注意**:`setLang` 只在用户**手动切换**时被调用;首次访问不写 localStorage,这样用户切换浏览器语言后(未手动选择过的情况下)能继续匹配上新语言。
 
 ### 8.2 src/main.js 切换片段
 
@@ -395,17 +432,23 @@ export function mount(container) {
 
 | 场景 | 行为 |
 |------|------|
-| `localStorage` 不可用(隐私模式) | `setLang` 不抛错,仅当前会话生效 |
-| `messages[lang][key]` 缺失 | 回退 default 语言,缺失 `console.warn` |
-| `messages[default][key]` 也缺失 | 返回 key 字符串本身防止空 UI |
+| 首次访问 + `navigator.language` = `zh-CN` / `zh-TW` / `zh-HK` 等 | 主语言段为 `zh`,启动语言 = `zh-CN` |
+| 首次访问 + `navigator.language` = `en` / `en-US` / `en-GB` 等 | 启动语言 = `en-US` |
+| 首次访问 + `navigator.language` = `ja-JP` / `fr-FR` / 其他非中英 | 启动语言 = `en-US`(兜底) |
+| `navigator` 不可用 / 抛错 | 启动语言 = `en-US` |
+| `localStorage` 不可用(隐私模式) | `setLang` 写入失败被吞掉,语言仅当前会话生效 |
+| `messages[lang][key]` 缺失 | 回退 `FALLBACK_LANG` 字典,`console.warn` |
+| `messages[FALLBACK_LANG][key]` 也缺失 | 返回 key 字符串本身防止空 UI,`console.warn` |
 | `vars` 中没有占位符所需 key | 保留 `{name}` 字面量 |
-| 用户手改 `localStorage` 为非法值 | `getLang()` 检测白名单,fallback default |
+| 用户手改 `localStorage` 为非法值 | `getLang()` 检测白名单失败 → 回到 `detectFromBrowser()` 流程 |
 | 切换语言时正在打包(异步进行中) | 完成后状态显示新语言;打包逻辑不受影响 |
 | 切换语言时 sources 列表非空 | unmount 后 sources 状态丢失(已声明) |
 
 ## §10 测试策略
 
 ### 10.1 `runTests()` 新增 i18n 章节
+
+> 浏览器检测分支不便在真实浏览器里 mock `navigator`,所以 `pickLangFromTag(tag)` 作为纯函数导出,直接覆盖映射规则。
 
 | # | 测试项 | 期望 |
 |---|--------|------|
@@ -418,20 +461,30 @@ export function mount(container) {
 | 7 | `setLang('zh-CN') → t('tab.packer')` === `'打包模组'` | 切换回来生效 |
 | 8 | 非法 `setLang('xx')` 不改变当前语言 | true |
 | 9 | `onLangChange` 回调被触发 | true |
-| 10 | 调用方测试结束后恢复 lang 为 zh-CN | true (避免污染后续测试) |
+| 10 | `pickLangFromTag('zh-CN')` === `'zh-CN'` | true |
+| 11 | `pickLangFromTag('zh-TW')` === `'zh-CN'` | true |
+| 12 | `pickLangFromTag('en-US')` === `'en-US'` | true |
+| 13 | `pickLangFromTag('en')` === `'en-US'` | true |
+| 14 | `pickLangFromTag('ja-JP')` === `'en-US'` | 非中英兜底 |
+| 15 | `pickLangFromTag('')` === `'en-US'` | 空兜底 |
+| 16 | 测试结束后恢复原 lang | 避免污染后续测试 |
 
 ### 10.2 手工回归清单
 
+> 测试前先 `localStorage.removeItem('dolbp_lang')`,确保首次访问场景。
+
 | # | 步骤 | 期望 |
 |---|------|------|
-| 1 | 启动页面,默认状态 | nav 中文,右上 `[中文]`(active) `[EN]`;`<html lang>=zh-CN` |
-| 2 | 点击 `EN` | nav 变为 `Pack Mod` / `Overlay Vanilla`;`<html lang>=en-US`;localStorage 写入 |
-| 3 | 刷新页面 | 仍为英文 |
-| 4 | 在 packer 添加 ZIP,然后切回中文 | sources 被清空(已声明);中文文案正确 |
-| 5 | 切到 overwrite tab | 已是中/英(取决于当前语言),所有文案正确 |
-| 6 | F12 `localStorage.removeItem('dolbp_lang')` 后刷新 | 回到默认 zh-CN |
-| 7 | F12 `localStorage.setItem('dolbp_lang','fr-FR')` 后刷新 | fallback zh-CN |
-| 8 | F12 `runTests()` | 所有 i18n 自检 PASS |
+| 1 | 浏览器主语言为 `zh-CN`,首次访问 | nav 中文;`[中文]` active;`<html lang>=zh-CN`;localStorage 无值 |
+| 2 | 浏览器主语言为 `en-US`,首次访问 | nav 英文;`[EN]` active;`<html lang>=en-US`;localStorage 无值 |
+| 3 | 浏览器主语言为 `ja-JP`,首次访问 | nav 英文(兜底);`<html lang>=en-US`;localStorage 无值 |
+| 4 | 点击 `EN`(在中文页面) | nav 切换为英文;`<html lang>=en-US`;localStorage 写入 `en-US` |
+| 5 | 刷新页面 | 仍为英文(localStorage 优先) |
+| 6 | 在 packer 添加 ZIP,然后切回中文 | sources 被清空(已声明);中文文案正确 |
+| 7 | 切到 overwrite tab | 当前语言文案正确 |
+| 8 | F12 `localStorage.removeItem('dolbp_lang')` 后刷新 | 重新走浏览器检测,语言可能变化(取决于浏览器) |
+| 9 | F12 `localStorage.setItem('dolbp_lang','fr-FR')` 后刷新 | 白名单检查失败 → 走浏览器检测 |
+| 10 | F12 `runTests()` | 所有 i18n 自检 PASS |
 
 ## §11 里程碑
 
@@ -459,8 +512,8 @@ export function mount(container) {
 
 ## §13 未来扩展(明确不在范围,但留口)
 
-- 增加 ja-JP / 其他语言:`SUPPORTED_LANGS` 加 + `messages[code]` 加。
-- 浏览器语言自动检测:`getLang()` 增加 `if (!stored) try navigator.language → 匹配 SUPPORTED_LANGS`。
+- 增加 ja-JP / 其他语言:`SUPPORTED_LANGS` 加 + `messages[code]` 加 + `pickLangFromTag()` 主语言段分支加。
 - README / spec 英化。
 - ICU 复数规则(若英文体验明显劣化再做)。
 - 保留 sources 跨切换:把 sources 提到 main.js 持有,作为 session-state 注入到 `mount(container, sessionState)`(需要修改 mount 签名)。
+- "重置为浏览器语言"操作:清掉 localStorage 让检测重新生效(目前只能 F12 操作)。
