@@ -26,15 +26,22 @@
     .source-row button { padding: 0.2em 0.5em; margin: 0; font-size: 0.85em; }
     #pack:disabled { opacity: 0.5; cursor: not-allowed; }
     #conflicts { margin: 0.6em 0; max-height: 200px; overflow-y: auto; }
-    nav.tabs { margin: 0.8em 0; border-bottom: 1px solid #ddd; }
+    .top-bar { display: flex; align-items: flex-end; gap: 0.6em; border-bottom: 1px solid #ddd; margin: 0.8em 0; }
+    nav.tabs { flex: 1; border-bottom: none; margin: 0; }
     nav.tabs button { padding: 0.4em 1em; margin: 0 0.4em 0 0; border: 1px solid #ddd; border-bottom: none; background: #f6f6f6; cursor: pointer; }
     nav.tabs button.active { background: #fff; border-bottom: 1px solid #fff; margin-bottom: -1px; font-weight: bold; }
+    .lang-switch { display: flex; gap: 0.3em; padding-bottom: 0.4em; }
+    .lang-switch button { padding: 0.2em 0.6em; margin: 0; font-size: 0.85em; border: 1px solid #ddd; background: #f6f6f6; cursor: pointer; }
+    .lang-switch button.active { background: #fff; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>DoL 美化模组工具集</h1>
 
-  <nav class="tabs" id="tab-nav"></nav>
+  <div class="top-bar">
+    <nav class="tabs" id="tab-nav"></nav>
+    <div class="lang-switch" id="lang-switch"></div>
+  </div>
   <main id="tool-container">正在加载工具集...</main>
 
   <script src="vendor/jszip.min.js"></script>
