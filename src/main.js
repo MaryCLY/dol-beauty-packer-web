@@ -106,6 +106,9 @@ function init() {
     return;
   }
 
+  const h1 = document.querySelector('h1');
+  if (h1) h1.textContent = t('common.app.title');
+
   renderNav();
   renderLangSwitch();
   window.addEventListener('hashchange', router);
@@ -114,6 +117,8 @@ function init() {
   // 监听语言切换:重 mount 当前工具 + 重渲染 nav 与 lang-switch + 同步 <html lang>。
   onLangChange((code) => {
     document.documentElement.lang = code;
+    const h1 = document.querySelector('h1');
+    if (h1) h1.textContent = t('common.app.title');
     if (currentToolId && TOOLS[currentToolId]) {
       try {
         TOOLS[currentToolId].module.unmount(containerEl);
