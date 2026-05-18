@@ -14,46 +14,49 @@ import {
   triggerDownload,
   registerTests,
 } from './common.js';
+import { t } from './i18n.js';
 
 // =========================================================
 // HTML 模板
 // =========================================================
 
-const HTML = `
-  <p class="intro">把含 body/clothes 等子目录的 ZIP 压缩包打包成 DoL ModLoader 格式。列表中越靠下的 ZIP 优先级越高（后写覆盖前写）。</p>
+function renderTemplate() {
+  return `
+    <p class="intro">${escapeHtml(t('packer.intro'))}</p>
 
-  <input type="file" id="file" accept=".zip" multiple hidden>
+    <input type="file" id="file" accept=".zip" multiple hidden>
 
-  <label>
-    <span>模组名称:</span>
-    <input type="text" id="name" placeholder="(留空则取第一个 ZIP 文件名)">
-  </label>
+    <label>
+      <span>${escapeHtml(t('packer.label.modName'))}</span>
+      <input type="text" id="name" placeholder="${escapeHtml(t('packer.placeholder.modName'))}">
+    </label>
 
-  <label>
-    <span>版本号:</span>
-    <input type="text" id="version" value="1.0.0">
-  </label>
+    <label>
+      <span>${escapeHtml(t('packer.label.version'))}</span>
+      <input type="text" id="version" value="1.0.0">
+    </label>
 
-  <div style="margin: 0.6em 0; font-weight: bold;">来源列表:</div>
-  <div id="sources-list"></div>
+    <div style="margin: 0.6em 0; font-weight: bold;">${escapeHtml(t('packer.label.sourcesList'))}</div>
+    <div id="sources-list"></div>
 
-  <button id="add-zip">+ 添加 ZIP</button>
+    <button id="add-zip">${escapeHtml(t('packer.button.addZip'))}</button>
 
-  <button id="pack" disabled>开始打包</button>
+    <button id="pack" disabled>${escapeHtml(t('packer.button.pack'))}</button>
 
-  <div id="status">请添加至少一个 ZIP 文件</div>
+    <div id="status">${escapeHtml(t('packer.status.idle'))}</div>
 
-  <div id="conflicts" hidden></div>
+    <div id="conflicts" hidden></div>
 
-  <a id="download" hidden>下载</a>
-`;
+    <a id="download" hidden></a>
+  `;
+}
 
 // =========================================================
 // Public lifecycle
 // =========================================================
 
 export function mount(container) {
-  container.innerHTML = HTML;
+  container.innerHTML = renderTemplate();
 
   // 局部状态
   const state = {
@@ -86,9 +89,9 @@ export function mount(container) {
 
   function renderSourcesList() {
     if (state.sources.length === 0) {
-      els.sourcesList.innerHTML = '<div style="color:#666;font-size:0.9em;">暂无 ZIP，请点击「+ 添加 ZIP」</div>';
+      els.sourcesList.innerHTML = '<div style="color:#666;font-size:0.9em;">' + escapeHtml(t('packer.empty.sources')) + '</div>';
       els.pack.disabled = true;
-      setStatus(els.status, 'idle', '请添加至少一个 ZIP 文件');
+      setStatus(els.status, 'idle', t('packer.status.idle'));
       return;
     }
     let html = '';
@@ -101,26 +104,34 @@ export function mount(container) {
       let folderTip = '';
       if (s.info && s.info.folderCount > 0) {
         const first = s.info.folders[0];
-        const more = s.info.folderCount > 1 ? ', ...' : '';
-        folderTip = ' (' + s.info.folderCount + ' 个目录: ' + first + more + ')';
+        const more = s.info.folderCount > 1 ? t('packer.summary.more') : '';
+        folderTip = t('packer.summary.folderHint', {
+          count: s.info.folderCount,
+          first: first,
+          more: more,
+        });
       }
+      const matchText = t('packer.summary.matchCount', { count: s.matchCount }) + folderTip;
       html += '<div class="source-row">' +
         '<div class="line1">' +
           '<span class="fname" title="' + escapeHtml(s.fileName) + '">' + escapeHtml(s.fileName) + '</span>' +
-          '<span>img路径:</span>' +
+          '<span>' + escapeHtml(t('packer.label.imgPath')) + '</span>' +
           '<input type="text" value="' + escapeHtml(s.path) + '" data-idx="' + i + '" class="path-input">' +
         '</div>' +
         '<div class="line2">' +
-          '<span class="count">匹配 ' + s.matchCount + ' 个文件' + folderTip + '</span>' +
-          (showUp ? '<button data-idx="' + i + '" data-dir="up">上移</button>' : '') +
-          (showDown ? '<button data-idx="' + i + '" data-dir="down">下移</button>' : '') +
-          '<button data-idx="' + i + '" data-dir="del">删除</button>' +
+          '<span class="count">' + escapeHtml(matchText) + '</span>' +
+          (showUp ? '<button data-idx="' + i + '" data-dir="up">' + escapeHtml(t('packer.button.up')) + '</button>' : '') +
+          (showDown ? '<button data-idx="' + i + '" data-dir="down">' + escapeHtml(t('packer.button.down')) + '</button>' : '') +
+          '<button data-idx="' + i + '" data-dir="del">' + escapeHtml(t('packer.button.del')) + '</button>' +
         '</div>' +
       '</div>';
     }
     els.sourcesList.innerHTML = html;
     els.pack.disabled = false;
-    setStatus(els.status, 'loaded', '已添加 ' + state.sources.length + ' 个 ZIP, 共 ' + totalFiles + ' 个文件');
+    setStatus(els.status, 'loaded', t('packer.status.loaded', {
+      zipCount: state.sources.length,
+      fileCount: totalFiles,
+    }));
 
     // path 输入改变
     els.sourcesList.querySelectorAll('.path-input').forEach((input) => {
@@ -157,7 +168,7 @@ export function mount(container) {
 
   async function mergeAndPack(sources, modName, modVersion) {
     if (typeof window.JSZip === 'undefined') {
-      throw new Error('JSZip 未加载');
+      throw new Error(t('common.error.jszip_missing'));
     }
     const finalMap = new Map();
     const conflicts = [];
@@ -166,7 +177,7 @@ export function mount(container) {
       const normalized = normalizePath(source.path);
       const entries = collectEntries(source.zip, normalized);
       if (entries.length === 0) {
-        throw new Error('"' + source.fileName + '" 路径 "' + source.path + '" 下无任何文件匹配');
+        throw new Error(t('common.error.no_match', { name: source.fileName, path: source.path }));
       }
       for (const item of entries) {
         const rel = item.rel;
@@ -208,7 +219,7 @@ export function mount(container) {
       return;
     }
     let html = '<details>' +
-      '<summary>冲突列表 (' + conflicts.length + ')</summary>' +
+      '<summary>' + escapeHtml(t('packer.conflicts.title', { count: conflicts.length })) + '</summary>' +
       '<ul style="font-size:0.9em;margin:0.4em 0;">';
     for (const c of conflicts) {
       html += '<li>img/' + escapeHtml(c.relPath) + ': ' + escapeHtml(c.originalSource) + ' → ' + escapeHtml(c.overwrittenBy) + '</li>';
@@ -226,11 +237,11 @@ export function mount(container) {
     const validFiles = files.filter((f) => f.name.toLowerCase().endsWith('.zip'));
     const invalidCount = files.length - validFiles.length;
     if (invalidCount > 0) {
-      setStatus(els.status, 'error', '错误: 有 ' + invalidCount + ' 个文件不是 .zip，已跳过');
+      setStatus(els.status, 'error', t('common.error.non_zip_skipped', { count: invalidCount }));
     }
     if (validFiles.length === 0) return;
 
-    setStatus(els.status, 'reading', '正在解析 ' + validFiles.length + ' 个压缩包...');
+    setStatus(els.status, 'reading', t('packer.status.reading', { count: validFiles.length }));
     let firstAdded = false;
 
     for (const file of validFiles) {
@@ -251,7 +262,7 @@ export function mount(container) {
           }
         }
       } catch (err) {
-        setStatus(els.status, 'error', '错误: 压缩包 ' + file.name + ' 损坏或不是有效的 ZIP');
+        setStatus(els.status, 'error', t('common.error.invalid_zip', { name: file.name }));
       }
     }
 
@@ -265,7 +276,7 @@ export function mount(container) {
 
   els.pack.addEventListener('click', async () => {
     if (state.sources.length === 0) {
-      setStatus(els.status, 'error', '错误: 请至少添加一个 ZIP 文件');
+      setStatus(els.status, 'error', t('packer.error.needZip'));
       return;
     }
     let name = els.name.value.trim();
@@ -277,21 +288,21 @@ export function mount(container) {
       version = '1.0.0';
     }
 
-    setStatus(els.status, 'packing', '正在合并与打包...');
+    setStatus(els.status, 'packing', t('packer.status.packing'));
     els.pack.disabled = true;
     els.download.hidden = true;
     els.conflicts.hidden = true;
     try {
       const result = await mergeAndPack(state.sources, name, version);
       state.blobUrl = triggerDownload(els.download, result.blob, name + '.mod.zip');
-      let statusText = '完成 ✓ 合并 ' + result.totalFiles + ' 个文件';
+      let statusText = t('packer.status.done', { count: result.totalFiles });
       if (result.conflicts.length > 0) {
-        statusText += ', 冲突(覆盖) ' + result.conflicts.length + ' 个';
+        statusText += t('packer.status.done_conflicts', { count: result.conflicts.length });
         renderConflicts(result.conflicts);
       }
       setStatus(els.status, 'done', statusText);
     } catch (err) {
-      setStatus(els.status, 'error', '错误: ' + err.message);
+      setStatus(els.status, 'error', err.message);
     } finally {
       els.pack.disabled = false;
     }
