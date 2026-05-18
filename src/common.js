@@ -3,6 +3,8 @@
 // 不依赖 ES Modules 之外的全局,JSZip 在调用 readZipFile 时通过 window.JSZip 读取。
 
 import { t } from './i18n.js';
+import { registerTests, getTests } from './test-registry.js';
+export { registerTests };
 
 // =========================================================
 // 路径与文件名
@@ -149,14 +151,8 @@ export function triggerDownload(anchorEl, blob, filename) {
 }
 
 // =========================================================
-// 测试注册表 + window.runTests
+// window.runTests
 // =========================================================
-
-const _tests = [];
-
-export function registerTests(name, fn) {
-  _tests.push({ name, fn });
-}
 
 if (typeof window !== 'undefined') {
   window.runTests = function() {
@@ -204,7 +200,7 @@ if (typeof window !== 'undefined') {
 
     // ---- 工具注册的测试 ----
 
-    for (const { name, fn } of _tests) {
+    for (const { name, fn } of getTests()) {
       try {
         const sub = fn();
         if (sub && typeof sub === 'object') {

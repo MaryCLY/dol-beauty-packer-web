@@ -2,7 +2,7 @@
 // i18n 核心模块:集中字典 + getLang/setLang/t/onLangChange。
 // 不依赖第三方库;沿用项目零构建路线。
 
-import { registerTests } from './common.js';
+import { registerTests } from './test-registry.js';
 
 export const SUPPORTED_LANGS = ['zh-CN', 'en-US'];
 export const FALLBACK_LANG = 'zh-CN';   // 字典缺失 key 时回退的语言(canonical)

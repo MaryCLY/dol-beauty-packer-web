@@ -108,6 +108,7 @@ function init() {
 
   const h1 = document.querySelector('h1');
   if (h1) h1.textContent = t('common.app.title');
+  document.title = t('common.app.title');
 
   renderNav();
   renderLangSwitch();
@@ -119,6 +120,7 @@ function init() {
     document.documentElement.lang = code;
     const h1 = document.querySelector('h1');
     if (h1) h1.textContent = t('common.app.title');
+    document.title = t('common.app.title');
     if (currentToolId && TOOLS[currentToolId]) {
       try {
         TOOLS[currentToolId].module.unmount(containerEl);
