@@ -13,50 +13,53 @@ import {
   triggerDownload,
   registerTests,
 } from './common.js';
+import { t } from './i18n.js';
 
 // =========================================================
 // HTML 模板
 // =========================================================
 
-const HTML = `
-  <p class="intro">上传原版游戏图包(.mod.zip)，再添加覆盖图包ZIP，合并后生成覆盖版模组。</p>
+function renderTemplate() {
+  return `
+    <p class="intro">${escapeHtml(t('overwrite.intro'))}</p>
 
-  <input type="file" id="base-file" accept=".zip" hidden>
-  <input type="file" id="overlay-file" accept=".zip" multiple hidden>
+    <input type="file" id="base-file" accept=".zip" hidden>
+    <input type="file" id="overlay-file" accept=".zip" multiple hidden>
 
-  <div id="base-info">暂未上传原版图包</div>
-  <button id="add-base">+ 上传原版图包</button>
+    <div id="base-info">${escapeHtml(t('overwrite.base.empty'))}</div>
+    <button id="add-base">${escapeHtml(t('overwrite.button.addBase'))}</button>
 
-  <div style="margin: 0.6em 0; font-weight: bold;">覆盖图包来源列表:</div>
-  <div id="sources-list"></div>
+    <div style="margin: 0.6em 0; font-weight: bold;">${escapeHtml(t('overwrite.label.sourcesList'))}</div>
+    <div id="sources-list"></div>
 
-  <button id="add-zip">+ 添加覆盖 ZIP</button>
+    <button id="add-zip">${escapeHtml(t('overwrite.button.addZip'))}</button>
 
-  <label>
-    <span>模组名称:</span>
-    <input type="text" id="name" placeholder="(默认: 原版名-overwrite)">
-  </label>
+    <label>
+      <span>${escapeHtml(t('overwrite.label.modName'))}</span>
+      <input type="text" id="name" placeholder="${escapeHtml(t('overwrite.placeholder.modName'))}">
+    </label>
 
-  <label>
-    <span>版本号:</span>
-    <input type="text" id="version" value="1.0.0">
-  </label>
+    <label>
+      <span>${escapeHtml(t('overwrite.label.version'))}</span>
+      <input type="text" id="version" value="1.0.0">
+    </label>
 
-  <button id="pack" disabled>开始覆盖打包</button>
+    <button id="pack" disabled>${escapeHtml(t('overwrite.button.pack'))}</button>
 
-  <div id="status">请先上传原版图包</div>
+    <div id="status">${escapeHtml(t('overwrite.status.idleBase'))}</div>
 
-  <div id="conflicts" hidden></div>
+    <div id="conflicts" hidden></div>
 
-  <a id="download" hidden>下载</a>
-`;
+    <a id="download" hidden></a>
+  `;
+}
 
 // =========================================================
 // Public lifecycle
 // =========================================================
 
 export function mount(container) {
-  container.innerHTML = HTML;
+  container.innerHTML = renderTemplate();
 
   const state = {
     baseZip: null,
@@ -90,27 +93,29 @@ export function mount(container) {
 
   function updateStatus() {
     if (!state.baseZip) {
-      setStatus(els.status, 'idle', '请先上传原版图包');
+      setStatus(els.status, 'idle', t('overwrite.status.idleBase'));
     } else if (state.sources.length === 0) {
-      setStatus(els.status, 'idle', '请添加至少一个覆盖图包');
+      setStatus(els.status, 'idle', t('overwrite.status.idleSources'));
     } else {
-      setStatus(els.status, 'loaded', '已准备好，可以开始覆盖打包');
+      setStatus(els.status, 'loaded', t('overwrite.status.ready'));
     }
   }
 
   function renderBaseInfo() {
     if (!state.baseZip) {
-      els.baseInfo.textContent = '暂未上传原版图包';
+      els.baseInfo.textContent = t('overwrite.base.empty');
       return;
     }
-    const bootName = state.baseBoot ? state.baseBoot.name : '(未知)';
-    const bootVersion = state.baseBoot ? state.baseBoot.version : '(未知)';
+    const unknown = t('overwrite.base.unknown');
+    const bootName = state.baseBoot ? state.baseBoot.name : unknown;
+    const bootVersion = state.baseBoot ? state.baseBoot.version : unknown;
     const imgCount = state.baseMap ? state.baseMap.size : 0;
-    els.baseInfo.innerHTML =
-      '已上传: ' + escapeHtml(state.baseName) +
-      '<br>模组名称: ' + escapeHtml(bootName) +
-      '<br>版本: ' + escapeHtml(bootVersion) +
-      '<br>img/ 文件数: ' + imgCount;
+    els.baseInfo.innerHTML = t('overwrite.base.summary', {
+      name: escapeHtml(state.baseName),
+      modName: escapeHtml(bootName),
+      version: escapeHtml(bootVersion),
+      imgCount: imgCount,
+    });
   }
 
   function getMatchInfo(zip, pathStr) {
@@ -122,35 +127,43 @@ export function mount(container) {
 
   function renderSourcesList() {
     if (state.sources.length === 0) {
-      els.sourcesList.innerHTML = '<div style="color:#666;font-size:0.9em;">暂无覆盖 ZIP，请点击「+ 添加覆盖 ZIP」</div>';
+      els.sourcesList.innerHTML =
+        '<div style="color:#666;font-size:0.9em;">' +
+        escapeHtml(t('overwrite.empty.sources')) +
+        '</div>';
       updatePackButton();
       updateStatus();
       return;
     }
     let html = '';
-    let totalFiles = 0;
     for (let i = 0; i < state.sources.length; i++) {
       const s = state.sources[i];
-      totalFiles += s.matchCount;
       const showUp = i > 0;
       const showDown = i < state.sources.length - 1;
       let folderTip = '';
       if (s.info && s.info.folderCount > 0) {
         const first = s.info.folders[0];
-        const more = s.info.folderCount > 1 ? ', ...' : '';
-        folderTip = ' (' + s.info.folderCount + ' 个目录: ' + first + more + ')';
+        const more = s.info.folderCount > 1 ? t('packer.summary.more') : '';
+        folderTip = t('packer.summary.folderHint', {
+          count: s.info.folderCount,
+          first: escapeHtml(first),
+          more: more,
+        });
       }
       html += '<div class="source-row">' +
         '<div class="line1">' +
           '<span class="fname" title="' + escapeHtml(s.fileName) + '">' + escapeHtml(s.fileName) + '</span>' +
-          '<span>img路径:</span>' +
+          '<span>' + escapeHtml(t('packer.label.imgPath')) + '</span>' +
           '<input type="text" value="' + escapeHtml(s.path) + '" data-idx="' + i + '" class="path-input">' +
         '</div>' +
         '<div class="line2">' +
-          '<span class="count">匹配 ' + s.matchCount + ' 个文件' + folderTip + '</span>' +
-          (showUp ? '<button data-idx="' + i + '" data-dir="up">上移</button>' : '') +
-          (showDown ? '<button data-idx="' + i + '" data-dir="down">下移</button>' : '') +
-          '<button data-idx="' + i + '" data-dir="del">删除</button>' +
+          '<span class="count">' +
+            t('packer.summary.matchCount', { count: s.matchCount }) +
+            folderTip +
+          '</span>' +
+          (showUp   ? '<button data-idx="' + i + '" data-dir="up">'   + escapeHtml(t('packer.button.up'))   + '</button>' : '') +
+          (showDown ? '<button data-idx="' + i + '" data-dir="down">' + escapeHtml(t('packer.button.down')) + '</button>' : '') +
+          '<button data-idx="' + i + '" data-dir="del">' + escapeHtml(t('packer.button.del')) + '</button>' +
         '</div>' +
       '</div>';
     }
@@ -198,10 +211,14 @@ export function mount(container) {
       return;
     }
     let html = '<details>' +
-      '<summary>冲突列表 (' + conflicts.length + ')</summary>' +
+      '<summary>' +
+      escapeHtml(t('overwrite.conflicts.title', { count: conflicts.length })) +
+      '</summary>' +
       '<ul style="font-size:0.9em;margin:0.4em 0;">';
     for (const c of conflicts) {
-      html += '<li>img/' + escapeHtml(c.relPath) + ': ' + escapeHtml(c.originalSource) + ' → ' + escapeHtml(c.overwrittenBy) + '</li>';
+      html += '<li>img/' + escapeHtml(c.relPath) + ': ' +
+        escapeHtml(c.originalSource) + ' → ' +
+        escapeHtml(c.overwrittenBy) + '</li>';
     }
     html += '</ul></details>';
     els.conflicts.innerHTML = html;
@@ -210,13 +227,13 @@ export function mount(container) {
 
   async function mergeAndPack(modName, modVersion) {
     if (typeof window.JSZip === 'undefined') {
-      throw new Error('JSZip 未加载');
+      throw new Error(t('common.error.jszip_missing'));
     }
     if (!state.baseZip) {
-      throw new Error('请先上传原版图包');
+      throw new Error(t('overwrite.error.needBase'));
     }
     if (state.sources.length === 0) {
-      throw new Error('请至少添加一个覆盖图包');
+      throw new Error(t('overwrite.error.needSources'));
     }
 
     const out = new window.JSZip();
@@ -242,7 +259,7 @@ export function mount(container) {
       const normalized = normalizePath(source.path);
       const entries = collectEntries(source.zip, normalized);
       if (entries.length === 0) {
-        throw new Error('"' + source.fileName + '" 路径 "' + source.path + '" 下无任何文件匹配');
+        throw new Error(t('common.error.no_match', { name: source.fileName, path: source.path }));
       }
       for (const item of entries) {
         const rel = item.rel;
@@ -250,7 +267,9 @@ export function mount(container) {
         if (finalImgPaths.has(outPath)) {
           conflicts.push({
             relPath: rel,
-            originalSource: state.baseMap.has(rel) ? '原版' : '前序覆盖',
+            originalSource: state.baseMap.has(rel)
+              ? t('overwrite.conflicts.fromVanilla')
+              : t('overwrite.conflicts.fromPrev'),
             overwrittenBy: source.fileName,
           });
         }
@@ -286,17 +305,17 @@ export function mount(container) {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.zip')) {
-      setStatus(els.status, 'error', '错误: 原版图包必须是 .zip 文件');
+      setStatus(els.status, 'error', t('overwrite.error.notZip'));
       e.target.value = '';
       return;
     }
 
-    setStatus(els.status, 'reading', '正在解析原版图包...');
+    setStatus(els.status, 'reading', t('overwrite.status.readingBase'));
     try {
       const zip = await readZipFile(file);
       const boot = await readBootJson(zip);
       if (!boot) {
-        setStatus(els.status, 'error', '错误: 这不是有效的 ModLoader 模组图包（缺少 boot.json）');
+        setStatus(els.status, 'error', t('overwrite.error.notMod'));
         e.target.value = '';
         return;
       }
@@ -334,7 +353,7 @@ export function mount(container) {
       updatePackButton();
       updateStatus();
     } catch (err) {
-      setStatus(els.status, 'error', '错误: ' + err.message);
+      setStatus(els.status, 'error', err.message);
     }
     e.target.value = '';
   });
@@ -354,11 +373,11 @@ export function mount(container) {
     const validFiles = files.filter((f) => f.name.toLowerCase().endsWith('.zip'));
     const invalidCount = files.length - validFiles.length;
     if (invalidCount > 0) {
-      setStatus(els.status, 'error', '错误: 有 ' + invalidCount + ' 个文件不是 .zip，已跳过');
+      setStatus(els.status, 'error', t('common.error.non_zip_skipped', { count: invalidCount }));
     }
     if (validFiles.length === 0) return;
 
-    setStatus(els.status, 'reading', '正在解析 ' + validFiles.length + ' 个覆盖图包...');
+    setStatus(els.status, 'reading', t('overwrite.status.readingSources', { count: validFiles.length }));
 
     for (const file of validFiles) {
       try {
@@ -372,7 +391,7 @@ export function mount(container) {
           info,
         });
       } catch (err) {
-        setStatus(els.status, 'error', '错误: 压缩包 ' + file.name + ' 损坏或不是有效的 ZIP');
+        setStatus(els.status, 'error', t('common.error.invalid_zip', { name: file.name }));
       }
     }
 
@@ -383,11 +402,11 @@ export function mount(container) {
   // 打包
   els.pack.addEventListener('click', async () => {
     if (!state.baseZip) {
-      setStatus(els.status, 'error', '错误: 请先上传原版图包');
+      setStatus(els.status, 'error', t('overwrite.error.needBase'));
       return;
     }
     if (state.sources.length === 0) {
-      setStatus(els.status, 'error', '错误: 请至少添加一个覆盖图包');
+      setStatus(els.status, 'error', t('overwrite.error.needSources'));
       return;
     }
     let name = els.name.value.trim();
@@ -399,21 +418,21 @@ export function mount(container) {
       version = state.baseBoot.version || '1.0.0';
     }
 
-    setStatus(els.status, 'packing', '正在合并与打包，时间可能较长，请耐心等待...');
+    setStatus(els.status, 'packing', t('overwrite.status.packing'));
     els.pack.disabled = true;
     els.download.hidden = true;
     els.conflicts.hidden = true;
     try {
       const result = await mergeAndPack(name, version);
       state.blobUrl = triggerDownload(els.download, result.blob, name + '.mod.zip');
-      let statusText = '完成 ✓ 合并 ' + result.totalFiles + ' 个文件';
+      let statusText = t('overwrite.status.done', { count: result.totalFiles });
       if (result.conflicts.length > 0) {
-        statusText += ', 冲突(覆盖) ' + result.conflicts.length + ' 个';
+        statusText += t('overwrite.status.done_conflicts', { count: result.conflicts.length });
         renderConflicts(result.conflicts);
       }
       setStatus(els.status, 'done', statusText);
     } catch (err) {
-      setStatus(els.status, 'error', '错误: ' + err.message);
+      setStatus(els.status, 'error', err.message);
     } finally {
       els.pack.disabled = false;
     }
