@@ -15,7 +15,7 @@
    python3 -m http.server 8000
    ```
 2. 浏览器打开 `http://localhost:8000`
-3. 默认进入「打包模组」tab（URL: `#/packer`），可在顶部 tab 切到「覆盖原版图包」（URL: `#/overwrite`）
+3. 默认进入「打包模组」tab（URL: `#/packer`），可在顶部 tab 切到「覆盖原版图包」（URL: `#/overwrite`）。顶部右侧 [中文]/[EN] 按钮可切换语言，首次访问按浏览器语言自动选择。
 
 ## 文件结构
 
