@@ -2,6 +2,10 @@
 // 共享纯函数 + UI helpers + window.runTests 入口。
 // 不依赖 ES Modules 之外的全局,JSZip 在调用 readZipFile 时通过 window.JSZip 读取。
 
+import { t } from './i18n.js';
+import { registerTests, getTests } from './test-registry.js';
+export { registerTests };
+
 // =========================================================
 // 路径与文件名
 // =========================================================
@@ -63,7 +67,7 @@ export function buildBootJson(name, version, imgList, additionList) {
 
 export async function readZipFile(file) {
   if (typeof window === 'undefined' || typeof window.JSZip === 'undefined') {
-    throw new Error('JSZip 未加载');
+    throw new Error(t('common.error.jszip_missing'));
   }
   return await window.JSZip.loadAsync(file);
 }
@@ -141,20 +145,14 @@ export function triggerDownload(anchorEl, blob, filename) {
   const url = URL.createObjectURL(blob);
   anchorEl.href = url;
   anchorEl.download = filename;
-  anchorEl.textContent = '下载 ' + filename;
+  anchorEl.textContent = t('common.button.download', { filename });
   anchorEl.hidden = false;
   return url;
 }
 
 // =========================================================
-// 测试注册表 + window.runTests
+// window.runTests
 // =========================================================
-
-const _tests = [];
-
-export function registerTests(name, fn) {
-  _tests.push({ name, fn });
-}
 
 if (typeof window !== 'undefined') {
   window.runTests = function() {
@@ -202,7 +200,7 @@ if (typeof window !== 'undefined') {
 
     // ---- 工具注册的测试 ----
 
-    for (const { name, fn } of _tests) {
+    for (const { name, fn } of getTests()) {
       try {
         const sub = fn();
         if (sub && typeof sub === 'object') {
