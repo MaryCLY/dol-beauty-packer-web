@@ -5,6 +5,10 @@
 1. **打包模组**：把含 `body`、`clothes` 等子目录的 ZIP 压缩包打包成 [DoL ModLoader](https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader) 兼容的美化模组格式。
 2. **覆盖原版图包**：把美化图片包直接覆盖到 ModLoader 版本的原版游戏图包（部分 DoL 版本下，原版图包通过 ModLoader 加载）。
 
+## 使用声明
+
+许多美化作者禁止二传，所以特此声明，打包后的版本，未经作者允许不要分享，仅限自己使用！
+
 ## 快速使用
 
 > ⚠ **必须通过 HTTP 服务器访问**，不能 `file://` 双击打开 `index.html`（ES Modules 在 file:// 下被浏览器拦截）。
